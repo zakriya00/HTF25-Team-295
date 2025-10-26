@@ -8,6 +8,7 @@ import asyncio
 import re
 from app.database import get_db
 from app import models
+from app.gamification import GamificationService
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -50,6 +51,25 @@ def save_message_to_db(db: Session, message_data: dict, room_id: str):
         )
         db.add(msg)
         db.commit()
+        
+        # Gamification: Award points for message
+        gamification = GamificationService(db)
+        points_earned = gamification.award_message_points(user.id, message_data.get("message", ""))
+        
+        # Award points for file sharing
+        if message_data.get("file_url"):
+            gamification.award_file_share_points(user.id)
+        
+        # Award points for mentions
+        mentions = message_data.get("mentions", [])
+        for mentioned_username in mentions:
+            mentioned_user = db.query(models.User).filter(models.User.username == mentioned_username).first()
+            if mentioned_user:
+                gamification.award_mention_points(mentioned_user.id)
+        
+        # Update study streak
+        gamification.update_study_streak(user.id)
+        
         return msg
     except Exception as e:
         print(f"Error saving message: {e}")

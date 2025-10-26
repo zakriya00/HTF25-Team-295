@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import ChatRoom from "./components/ChatRoom";
 import Sidebar from "./components/Sidebar";
 import { SocketProvider } from "./context/SocketContext";
+import { GamificationProvider } from "./context/GamificationContext";
 
 export default function App() {
   const [username, setUsername] = useState("");
@@ -180,7 +181,9 @@ export default function App() {
 
           {/* Chat Area */}
           <div className="flex-1 flex flex-col">
-            <ChatRoom username={username} room={currentRoom} />
+            <GamificationProvider username={username}>
+              <ChatRoom username={username} room={currentRoom} />
+            </GamificationProvider>
           </div>
         </div>
       </div>

@@ -3,9 +3,6 @@ import { FiSend, FiPaperclip, FiMoreVertical, FiUsers, FiWifi, FiWifiOff, FiTras
 import { BsEmojiSmile } from "react-icons/bs";
 import Picker from "emoji-picker-react";
 import axios from "axios";
-import GamificationSidebar from "./GamificationSidebar";
-import GamificationNotification from "./GamificationNotification";
-import { GamificationProvider, useGamification } from "../context/GamificationContext";
 
 // Component to highlight @mentions
 function MessageWithMentions({ text, mentions, currentUser }) {
@@ -28,7 +25,7 @@ function MessageWithMentions({ text, mentions, currentUser }) {
   );
 }
 
-function ChatRoomContent({ username, room }) {
+export default function ChatRoomMinimal({ username, room }) {
   const [socket, setSocket] = useState(null);
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
@@ -41,18 +38,8 @@ function ChatRoomContent({ username, room }) {
   const [showOnlineUsers, setShowOnlineUsers] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showDeleteIcon, setShowDeleteIcon] = useState(null);
-  const [showGamification, setShowGamification] = useState(false);
-  const [notification, setNotification] = useState(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-  
-  // Gamification context
-  const { userStats, fetchUserStats } = useGamification();
-  
-  // Debug: Log admin status changes
-  useEffect(() => {
-    console.log("🔑 Admin status changed to:", isAdmin);
-  }, [isAdmin]);
 
   // Fetch chat history on mount
   useEffect(() => {
@@ -104,27 +91,22 @@ function ChatRoomContent({ username, room }) {
         } else if (data.type === "stop_typing") {
           setTypingUsers(prev => prev.filter(user => user !== data.username));
         } else if (data.type === "user_joined" || data.type === "user_left") {
-          // Update online users list
           if (data.online_users) {
             setOnlineUsers(data.online_users);
           }
           setMessages((prev) => [...prev, data]);
         } else if (data.type === "online_users") {
-          // Update online users list without adding to messages
           if (data.online_users) {
             setOnlineUsers(data.online_users);
           }
         } else if (data.type === "history") {
-          // Load chat history
           if (data.messages && data.messages.length > 0) {
             setMessages(data.messages);
           }
         } else if (data.type === "admin_status") {
-          // User is admin
           console.log("🎉 Admin status received:", data.is_admin);
           setIsAdmin(data.is_admin);
         } else if (data.type === "message_deleted") {
-          // Remove deleted message from UI
           setMessages(prev => prev.filter(m => m.id !== data.message_id));
         } else if (data.type === "error") {
           alert(data.message);
@@ -138,9 +120,7 @@ function ChatRoomContent({ username, room }) {
 
     setSocket(ws);
     
-    // Cleanup function
     return () => {
-      // Clear typing indicators when leaving room
       setTypingUsers([]);
       setIsTyping(false);
       if (typingTimeoutRef.current) {
@@ -159,12 +139,10 @@ function ChatRoomContent({ username, room }) {
   const handleTyping = (e) => {
     setMessage(e.target.value);
     
-    // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     
-    // If input is empty, stop typing immediately
     if (!e.target.value.trim()) {
       if (isTyping) {
         setIsTyping(false);
@@ -175,7 +153,6 @@ function ChatRoomContent({ username, room }) {
       return;
     }
     
-    // Only send typing indicator if there's actual content and we're not already typing
     if (!isTyping) {
       setIsTyping(true);
       if (socket) {
@@ -183,20 +160,17 @@ function ChatRoomContent({ username, room }) {
       }
     }
     
-    // Set new timeout to stop typing indicator
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
-      // Send stop typing indicator
       if (socket) {
         socket.send(JSON.stringify({ type: "stop_typing", username }));
       }
-    }, 2000); // 2 seconds after stopping typing
+    }, 2000);
   };
 
   const sendMessage = async () => {
     if (!socket || !message.trim()) return;
     
-    // Clear typing indicator immediately when sending
     if (isTyping) {
       setIsTyping(false);
       if (socket) {
@@ -204,7 +178,6 @@ function ChatRoomContent({ username, room }) {
       }
     }
     
-    // Clear any pending typing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
@@ -212,11 +185,6 @@ function ChatRoomContent({ username, room }) {
     const msg = JSON.stringify({ username, message });
     socket.send(msg);
     setMessage("");
-    
-    // Refresh user stats after sending message
-    if (fetchUserStats) {
-      await fetchUserStats();
-    }
   };
 
   const handleFileChange = (e) => setFile(e.target.files[0]);
@@ -234,7 +202,6 @@ function ChatRoomContent({ username, room }) {
       });
       const fileUrl = res.data.file_url;
 
-      // Send file information through WebSocket
       const msg = JSON.stringify({
         username,
         message: `📎 Shared: ${file.name}`,
@@ -255,45 +222,6 @@ function ChatRoomContent({ username, room }) {
     if (!timestamp) return "";
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const deleteMessage = (messageId) => {
-    console.log("Delete message clicked, ID:", messageId, "Socket:", socket, "IsAdmin:", isAdmin);
-    if (socket && messageId) {
-      socket.send(JSON.stringify({
-        type: "delete_message",
-        username: username,
-        message_id: messageId
-      }));
-      // Remove message from UI
-      setMessages(prev => prev.filter(m => m.id !== messageId));
-    } else {
-      console.log("Cannot delete - missing socket or messageId");
-    }
-  };
-
-  const handleMessageDeleted = (messageId) => {
-    setMessages(prev => prev.filter(m => m.id !== messageId));
-  };
-
-  const muteUser = (targetUsername) => {
-    if (socket && isAdmin) {
-      socket.send(JSON.stringify({
-        type: "mute_user",
-        username: username,
-        target_username: targetUsername
-      }));
-    }
-  };
-
-  const unmuteUser = (targetUsername) => {
-    if (socket && isAdmin) {
-      socket.send(JSON.stringify({
-        type: "unmute_user",
-        username: username,
-        target_username: targetUsername
-      }));
-    }
   };
 
   return (
@@ -321,26 +249,7 @@ function ChatRoomContent({ username, room }) {
         </div>
         
         <div className="flex items-center space-x-3">
-          {/* User Stats Display */}
-          {userStats && (
-            <div className="hidden sm:flex items-center space-x-2 text-sm">
-              <span className="text-yellow-400 font-semibold">{userStats.points} pts</span>
-              <span className="text-blue-400">L{userStats.level}</span>
-              <span className="text-green-400">🔥{userStats.study_streak}</span>
-            </div>
-          )}
-          
           <span className="text-sm text-gray-400 hidden sm:block">👤 {username}</span>
-          
-          {/* Gamification Button */}
-          <button
-            onClick={() => setShowGamification(true)}
-            className="text-yellow-400 hover:text-yellow-300 transition-colors"
-            title="View Gamification"
-          >
-            <FiAward size={16} />
-          </button>
-          
           <button className="text-gray-400 hover:text-white transition-colors">
             <FiMoreVertical size={16} />
           </button>
@@ -365,24 +274,6 @@ function ChatRoomContent({ username, room }) {
                 <div key={i} className="flex items-center bg-gray-700 px-2 py-1 rounded-full text-xs">
                   <div className="w-2 h-2 bg-green-400 rounded-full mr-1"></div>
                   {user}
-                  {isAdmin && user !== username && (
-                    <>
-                      <button 
-                        onClick={() => muteUser(user)}
-                        className="ml-2 text-red-400 hover:text-red-300"
-                        title="Mute user"
-                      >
-                        🔇
-                      </button>
-                      <button 
-                        onClick={() => unmuteUser(user)}
-                        className="ml-1 text-green-400 hover:text-green-300"
-                        title="Unmute user"
-                      >
-                        🔊
-                      </button>
-                    </>
-                  )}
                 </div>
               ))
             ) : (
@@ -423,36 +314,13 @@ function ChatRoomContent({ username, room }) {
                     ? "bg-blue-600 text-white rounded-br-none"
                     : "bg-gray-800 text-gray-100 rounded-bl-none"
                 }`}
-                onMouseEnter={() => {
-                  if (isAdmin && m.type !== "system") {
-                    setShowDeleteIcon(m.id || m.message_id || i);
-                  }
-                }}
-                onMouseLeave={() => setShowDeleteIcon(null)}
               >
-                {/* Delete button for admins - show on hover */}
-                {isAdmin && m.type !== "system" && showDeleteIcon === (m.id || m.message_id || i) && (m.id || m.message_id) && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      console.log("Deleting message with ID:", m.id || m.message_id);
-                      deleteMessage(m.id || m.message_id);
-                    }}
-                    className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 cursor-pointer shadow-lg"
-                    title="Delete message"
-                    style={{ zIndex: 9999 }}
-                  >
-                    <FiTrash2 size={12} />
-                  </button>
-                )}
                 {m.type === "system" ? (
                   <div className="text-center">
                     <p className="text-sm italic text-gray-400">{m.message}</p>
                   </div>
                 ) : (
                   <div>
-                    {/* Highlight mentions */}
                     <MessageWithMentions text={m.message} mentions={m.mentions} currentUser={username} />
                     <p className="text-xs opacity-70 mt-1">
                       {formatTime(m.timestamp)}
@@ -466,7 +334,6 @@ function ChatRoomContent({ username, room }) {
                 {/* Handle file attachments */}
                 {m.file_url && (
                   <div className="mt-2">
-                    {/* Image files */}
                     {m.file_type && m.file_type.startsWith('image/') ? (
                       <img
                         src={m.file_url}
@@ -504,7 +371,7 @@ function ChatRoomContent({ username, room }) {
           </div>
         ))}
 
-        {/* Typing Indicator - Don't show for current user */}
+        {/* Typing Indicator */}
         {typingUsers.filter(user => user !== username).length > 0 && (
           <div className="flex justify-start">
             <div className="bg-gray-800 px-4 py-2 rounded-2xl rounded-bl-none">
@@ -577,22 +444,6 @@ function ChatRoomContent({ username, room }) {
           </div>
         )}
       </div>
-
-      {/* Gamification Components */}
-      <GamificationSidebar
-        room={room}
-        isOpen={showGamification}
-        onClose={() => setShowGamification(false)}
-      />
-      
-      <GamificationNotification
-        notification={notification}
-        onClose={() => setNotification(null)}
-      />
     </div>
   );
-}
-
-export default function ChatRoom({ username, room }) {
-  return <ChatRoomContent username={username} room={room} />;
 }

@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.auth import router as auth_router  # Add "app."
 from app.chat import router as chat_router  # Add "app."
+from app.gamification_router import router as gamification_router
 import os
 import shutil
 import uuid
@@ -30,6 +31,7 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(gamification_router)
 
 @app.get("/")
 def root():
